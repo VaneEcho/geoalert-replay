@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>干扰告警地图回放平台</title>
+  <title>Jamming Alert Replay Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; height: 100%; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { background: #f1f5f9; color: #0f172a; }
-    .app { display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+    .app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
     .sidebar { overflow-y: auto; background: #fff; border-right: 1px solid #e2e8f0; padding: 20px; }
     .main { position: relative; }
     #map { width: 100%; height: 100%; }
@@ -20,7 +20,7 @@
     .muted { color: #64748b; font-size: 13px; }
     .error { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 14px; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .btn, .chip, input[type="file"] { font: inherit; }
+    .btn, .chip, input[type="file"], input, select { font: inherit; }
     .btn { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
     .btn.primary { background: #0f172a; color: #fff; border-color: #0f172a; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -31,29 +31,23 @@
     .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; }
     .stat .label { font-size: 12px; color: #64748b; }
     .stat .value { margin-top: 4px; font-size: 28px; font-weight: 700; }
-    .status-panel {
-      position: absolute; left: 16px; top: 16px; z-index: 500;
-      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
-      border-radius: 16px; padding: 14px 16px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
-      max-width: 420px;
-    }
+    .status-panel { position: absolute; left: 16px; top: 16px; z-index: 500; background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border-radius: 16px; padding: 14px 16px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12); max-width: 440px; }
     .status-panel .title { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #64748b; }
     .status-panel .time { margin-top: 4px; font-weight: 700; font-size: 18px; }
     .status-panel .desc { margin-top: 8px; font-size: 14px; color: #334155; line-height: 1.6; }
-    .empty {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200;
-      pointer-events: none; text-align: center; padding: 30px; color: #475569;
-    }
-    .field { margin-bottom: 14px; }
+    .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200; pointer-events: none; text-align: center; padding: 30px; color: #475569; }
+    .field { margin-bottom: 12px; }
     .field label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
     .range-wrap { margin-top: 8px; }
     input[type="range"] { width: 100%; }
+    input[type="number"], select { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; background: #fff; }
     .kv { display: grid; grid-template-columns: 90px 1fr; gap: 8px; font-size: 14px; line-height: 1.6; }
-    .hint { margin-top: 10px; font-size: 12px; line-height: 1.6; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 10px 12px; border-radius: 12px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .selection-active { background: #0ea5e9 !important; color: #fff !important; border-color: #0284c7 !important; }
     .leaflet-top.leaflet-right { top: 16px; right: 16px; }
     @media (max-width: 960px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-      .sidebar { max-height: 45vh; border-right: none; border-bottom: 1px solid #e2e8f0; }
+      .sidebar { max-height: 55vh; border-right: none; border-bottom: 1px solid #e2e8f0; }
     }
   </style>
 </head>
@@ -61,62 +55,114 @@
   <div class="app">
     <aside class="sidebar">
       <div style="margin-bottom: 20px;">
-        <h1>干扰告警地图回放平台</h1>
-        <p>上传 Excel 后，系统按“告警发生时间—告警消除时间”回放点位。当前版本是纯点位模式，用于观察干扰区域是否在地图上迁移。</p>
+        <h1 id="appTitle">Jamming Alert Replay Map</h1>
+        <p id="appDesc">Upload an Excel file and replay points by "alert start time - alert end time". The map shows active records at the current moment.</p>
       </div>
 
       <div class="card">
         <div class="field">
-          <label for="fileInput">上传 Excel 文件</label>
+          <label for="languageSelect" id="languageLabel">Language</label>
+          <select id="languageSelect" class="btn" style="width: 100%;">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fileInput" id="uploadLabel">Upload Excel File</label>
           <input id="fileInput" type="file" accept=".xlsx,.xls" />
-          <div class="muted" style="margin-top: 8px;">建议包含字段：地市、经度、纬度、告警发生时间、告警消除时间。</div>
-          <div id="sheetName" class="muted" style="margin-top: 8px;"></div>
-          <div id="errorBox" class="error" style="display:none;"></div>
+          <div id="uploadHint" class="muted" style="margin-top: 8px;">Recommended fields: city, longitude, latitude, alert start time, alert end time.</div>
+        </div>
+        <div class="field">
+          <label for="sheetSelect" id="sheetSelectLabel">Select Worksheet</label>
+          <select id="sheetSelect" disabled></select>
+        </div>
+        <div id="sheetName" class="muted"></div>
+        <div id="errorBox" class="error" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="mappingTitle">Field Mapping</h2>
+        <div class="grid-2">
+          <div class="field"><label id="mapCityLabel" for="mapCity">City</label><select id="mapCity" disabled></select></div>
+          <div class="field"><label id="mapOrderLabel" for="mapOrder">Order</label><select id="mapOrder" disabled></select></div>
+          <div class="field"><label id="mapLngLabel" for="mapLng">Longitude *</label><select id="mapLng" disabled></select></div>
+          <div class="field"><label id="mapLatLabel" for="mapLat">Latitude *</label><select id="mapLat" disabled></select></div>
+          <div class="field"><label id="mapStartLabel" for="mapStart">Start Time *</label><select id="mapStart" disabled></select></div>
+          <div class="field"><label id="mapEndLabel" for="mapEnd">End Time *</label><select id="mapEnd" disabled></select></div>
+          <div class="field" style="grid-column: 1 / -1;"><label id="mapDurationLabel" for="mapDuration">Duration (optional)</label><select id="mapDuration" disabled></select></div>
+        </div>
+        <button id="applyMappingBtn" class="btn" disabled style="width:100%;">Apply Mapping</button>
+      </div>
+
+      <div class="card">
+        <h2 id="playbackControlsTitle">Playback Controls</h2>
+        <div class="row" style="margin-bottom: 12px;">
+          <button id="playBtn" class="btn primary" disabled>Play</button>
+          <button id="pauseBtn" class="btn" disabled>Pause</button>
+          <button id="resetBtn" class="btn" disabled>Reset</button>
+          <button id="endBtn" class="btn" disabled>Jump to End</button>
+        </div>
+
+        <div class="field">
+          <label id="speedLabel">Playback Speed</label>
+          <div id="speedWrap" class="row"></div>
+          <div class="row" style="margin-top:8px;">
+            <input id="customSpeedInput" type="number" min="0.1" step="0.1" style="flex:1;" />
+            <button id="setCustomSpeedBtn" class="btn">Set</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label id="stepLabel">Time Step</label>
+          <div id="stepWrap" class="row"></div>
+          <div class="row" style="margin-top:8px;">
+            <input id="customStepInput" type="number" min="1" step="1" style="flex:1;" />
+            <button id="setCustomStepBtn" class="btn">Set</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="timeRange" id="timelineLabel">Timeline</label>
+          <div class="range-wrap"><input id="timeRange" type="range" min="0" max="100" value="0" disabled /></div>
+          <div class="muted" style="margin-top: 8px;"><span id="currentTimeLabel">Current Time:</span> <span id="currentTime">-</span></div>
         </div>
       </div>
 
       <div class="card">
-        <h2>回放控制</h2>
-        <div class="row" style="margin-bottom: 14px;">
-          <button id="playBtn" class="btn primary" disabled>播放</button>
-          <button id="pauseBtn" class="btn" disabled>暂停</button>
-          <button id="resetBtn" class="btn" disabled>回到起点</button>
-          <button id="endBtn" class="btn" disabled>跳到终点</button>
+        <h2 id="exportTitle">Export</h2>
+        <div class="row">
+          <button id="exportGeoJsonBtn" class="btn" disabled>Export GeoJSON</button>
+          <button id="exportKmlBtn" class="btn" disabled>Export KML</button>
         </div>
-
-        <div class="field">
-          <label>回放倍速</label>
-          <div id="speedWrap" class="row"></div>
-        </div>
-
-        <div class="field">
-          <label>时间步长</label>
-          <div id="stepWrap" class="row"></div>
-        </div>
-
-        <div class="field">
-          <label for="timeRange">时间轴</label>
-          <div class="range-wrap">
-            <input id="timeRange" type="range" min="0" max="100" value="0" disabled />
-          </div>
-          <div class="muted" style="margin-top: 8px;">当前时间：<span id="currentTime">-</span></div>
+        <div class="row" style="margin-top:8px;">
+          <button id="selectBoxBtn" class="btn" disabled>Box Select</button>
+          <button id="clearBoxBtn" class="btn" disabled>Clear Box</button>
         </div>
       </div>
 
       <div class="stats">
-        <div class="stat"><div class="label">总记录数</div><div id="totalCount" class="value">0</div></div>
-        <div class="stat"><div class="label">当前活跃</div><div id="activeCount" class="value" style="color:#dc2626;">0</div></div>
-        <div class="stat"><div class="label">尚未开始</div><div id="pendingCount" class="value" style="color:#334155;">0</div></div>
-        <div class="stat"><div class="label">已结束</div><div id="finishedCount" class="value" style="color:#047857;">0</div></div>
+        <div class="stat"><div id="totalCountLabel" class="label">Total Records</div><div id="totalCount" class="value">0</div></div>
+        <div class="stat"><div id="activeCountLabel" class="label">Active</div><div id="activeCount" class="value" style="color:#dc2626;">0</div></div>
+        <div class="stat"><div id="pendingCountLabel" class="label">Pending</div><div id="pendingCount" class="value" style="color:#334155;">0</div></div>
+        <div class="stat"><div id="finishedCountLabel" class="label">Finished</div><div id="finishedCount" class="value" style="color:#047857;">0</div></div>
       </div>
 
       <div class="card" style="margin-top: 16px;">
-        <h2>数据摘要</h2>
-        <div class="kv"><div>开始时间</div><div id="summaryStart">-</div></div>
-        <div class="kv"><div>结束时间</div><div id="summaryEnd">-</div></div>
-        <div class="kv"><div>总时长</div><div id="summaryDuration">-</div></div>
-        <div class="kv"><div>时区</div><div>按 Excel 原始时间解释，不额外换算</div></div>
-        <div class="hint">OpenStreetMap 的 attribution 我保留了。那个小角标不是纯装修材料，许可要求摆在那里，不能硬抹掉。</div>
+        <h2 id="selectionStatsTitle">Selection Stats</h2>
+        <div class="stats">
+          <div class="stat"><div id="selectionTotalLabel" class="label">Total Records</div><div id="selectionTotalCount" class="value">0</div></div>
+          <div class="stat"><div id="selectionActiveLabel" class="label">Active</div><div id="selectionActiveCount" class="value" style="color:#dc2626;">0</div></div>
+          <div class="stat"><div id="selectionPendingLabel" class="label">Pending</div><div id="selectionPendingCount" class="value" style="color:#334155;">0</div></div>
+          <div class="stat"><div id="selectionFinishedLabel" class="label">Finished</div><div id="selectionFinishedCount" class="value" style="color:#047857;">0</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2 id="dataSummaryTitle">Data Summary</h2>
+        <div class="kv"><div id="summaryStartLabel">Start</div><div id="summaryStart">-</div></div>
+        <div class="kv"><div id="summaryEndLabel">End</div><div id="summaryEnd">-</div></div>
+        <div class="kv"><div id="summaryDurationLabel">Duration</div><div id="summaryDuration">-</div></div>
+        <div class="kv"><div id="timezoneLabel">Timezone</div><div id="timezoneDesc">Interpret input timestamps as UTC+8.</div></div>
       </div>
     </aside>
 
@@ -124,12 +170,12 @@
       <div id="map"></div>
       <div id="emptyState" class="empty">
         <div>
-          <div style="font-size: 24px; font-weight: 700; color:#0f172a;">先上传 Excel</div>
-          <div style="margin-top: 10px; font-size: 14px; line-height: 1.7;">上传后会按时间回放点位，地图上只显示当前时刻还在告警持续区间内的记录。</div>
+          <div id="emptyTitle" style="font-size: 24px; font-weight: 700; color:#0f172a;">Upload Excel first</div>
+          <div id="emptyDesc" style="margin-top: 10px; font-size: 14px; line-height: 1.7;">After upload, points are replayed by time. The map only shows records active at the current moment.</div>
         </div>
       </div>
       <div id="statusPanel" class="status-panel" style="display:none;">
-        <div class="title">Replay Status</div>
+        <div id="statusTitle" class="title">Replay Status</div>
         <div id="statusTime" class="time">-</div>
         <div id="statusDesc" class="desc">-</div>
       </div>
@@ -139,381 +185,397 @@
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const FIELD_ALIASES = {
-      city: ["地市", "城市", "city"],
-      lng: ["经度", "longitude", "lng", "lon"],
-      lat: ["纬度", "latitude", "lat"],
-      start: ["告警发生时间", "发生时间", "开始时间", "start_time", "start"],
-      end: ["告警消除时间", "消除时间", "结束时间", "end_time", "end"],
-      duration: ["持续时间(秒)", "持续时间", "duration", "duration_sec"],
-      order: ["持续时间排序编号", "排序编号", "order", "rank"]
+    const I18N = {
+      en: {
+        title: 'Jamming Alert Replay Map', desc: 'Upload an Excel file and replay points by "alert start time - alert end time". The map shows active records at the current moment.', language: 'Language',
+        upload: 'Upload Excel File', uploadHint: 'Recommended fields: city, longitude, latitude, alert start time, alert end time.',
+        sheetSelect: 'Select Worksheet', mappingTitle: 'Field Mapping', mapCity:'City', mapOrder:'Order', mapLng:'Longitude *', mapLat:'Latitude *', mapStart:'Start Time *', mapEnd:'End Time *', mapDuration:'Duration (optional)', applyMapping:'Apply Mapping',
+        controls: 'Playback Controls', play: 'Play', pause: 'Pause', reset: 'Reset', jumpToEnd: 'Jump to End', speed: 'Playback Speed', step: 'Time Step', timeline: 'Timeline', currentTime: 'Current Time:',
+        total: 'Total Records', active: 'Active', pending: 'Pending', finished: 'Finished', summary: 'Data Summary', start: 'Start', end: 'End', duration: 'Duration', timezone: 'Timezone', timezoneDesc: 'Interpret input timestamps as UTC+8.',
+        emptyTitle: 'Upload Excel first', emptyDesc: 'After upload, points are replayed by time. The map only shows records active at the current moment.', statusTitle: 'Replay Status',
+        speedUnit: 'x', stepUnit: 's', set: 'Set', export:'Export', exportGeoJson:'Export GeoJSON', exportKml:'Export KML', boxSelect:'Box Select', clearBox:'Clear Box', selectionStats:'Selection Stats',
+        activeStatus: 'Active alerts: {count}. Dashed lines connect active points to observe movement trends.',
+        popupCity: 'City', popupCoord: 'Coordinates', popupStart: 'Start', popupEnd: 'End', popupDuration: 'Duration', popupOrder: 'Order',
+        currentSheet: 'Current worksheet: {name}', parseNoData: 'No usable data found in the worksheet.', parseNoValid: 'No valid records were parsed. Please check data format.', readFail: 'Failed to read file.', parseFail: 'Parsing failed.',
+        fieldMissing: 'Required mapping missing: {fields}',
+        fieldsLng: 'longitude', fieldsLat: 'latitude', fieldsStart: 'start time', fieldsEnd: 'end time',
+        unmapped: '(unmapped)', customPlaceholderSpeed:'Custom speed', customPlaceholderStep:'Custom step (seconds)'
+      },
+      zh: {
+        title: '干扰告警地图回放平台', desc: '上传 Excel 后，系统按“告警发生时间—告警消除时间”回放点位。地图仅展示当前时刻仍处于告警区间内的记录。', language: '语言',
+        upload: '上传 Excel 文件', uploadHint: '建议包含字段：地市、经度、纬度、告警发生时间、告警消除时间。',
+        sheetSelect: '选择工作表', mappingTitle: '字段映射', mapCity:'地市', mapOrder:'排序编号', mapLng:'经度 *', mapLat:'纬度 *', mapStart:'开始时间 *', mapEnd:'结束时间 *', mapDuration:'持续时间（可选）', applyMapping:'应用映射',
+        controls: '回放控制', play: '播放', pause: '暂停', reset: '回到起点', jumpToEnd: '跳到终点', speed: '回放倍速', step: '时间步长', timeline: '时间轴', currentTime: '当前时间：',
+        total: '总记录数', active: '当前活跃', pending: '尚未开始', finished: '已结束', summary: '数据摘要', start: '开始时间', end: '结束时间', duration: '总时长', timezone: '时区', timezoneDesc: '按 UTC+8 解释输入时间。',
+        emptyTitle: '先上传 Excel', emptyDesc: '上传后会按时间回放点位，地图上仅显示当前时刻还在告警持续区间内的记录。', statusTitle: '回放状态',
+        speedUnit: 'x', stepUnit: '秒', set: '设置', export:'导出', exportGeoJson:'导出 GeoJSON', exportKml:'导出 KML', boxSelect:'框选统计', clearBox:'清除框选', selectionStats:'框选范围统计',
+        activeStatus: '活跃告警 {count} 条，当前用虚线串起活跃点，方便观察干扰是否在地图上迁移。',
+        popupCity: '地市', popupCoord: '经纬度', popupStart: '开始', popupEnd: '结束', popupDuration: '持续', popupOrder: '排序编号',
+        currentSheet: '当前工作表：{name}', parseNoData: '工作表中没有可用数据。', parseNoValid: '没有解析出有效记录，请检查数据格式。', readFail: '文件读取失败。', parseFail: '解析失败。',
+        fieldMissing: '缺少必填映射：{fields}',
+        fieldsLng: '经度', fieldsLat: '纬度', fieldsStart: '开始时间', fieldsEnd: '结束时间',
+        unmapped: '（未映射）', customPlaceholderSpeed:'自定义倍速', customPlaceholderStep:'自定义步长（秒）'
+      }
     };
 
-    const SPEED_OPTIONS = [1, 2, 4, 8, 16, 32];
-    const STEP_OPTIONS = [1, 5, 10, 30, 60, 300];
+    const FIELD_ALIASES = { city: ['地市','城市','city'], lng: ['经度','longitude','lng','lon'], lat: ['纬度','latitude','lat'], start: ['告警发生时间','发生时间','开始时间','start_time','start'], end: ['告警消除时间','消除时间','结束时间','end_time','end'], duration: ['持续时间(秒)','持续时间','duration','duration_sec'], order: ['持续时间排序编号','排序编号','order','rank'] };
+    const SPEED_OPTIONS = [1,2,4,8,16,32];
+    const STEP_OPTIONS = [1,5,10,30,60,300];
+    const CONFIG_KEY = 'geoalert_replay_config_v2';
 
-    let map;
-    let records = [];
-    let markersLayer;
-    let polylineLayer;
-    let playbackTimer = null;
-    let speed = 4;
-    let stepSeconds = 10;
-    let cursor = 0;
-    let minTs = 0;
-    let maxTs = 0;
+    let currentLang = 'en';
+    let map, markersLayer, polylineLayer;
+    let workbookData = null, currentSheetName = '', sheetRows = [], headers = [];
+    let records = [], playbackTimer = null;
+    let speed = 32, stepSeconds = 60, cursor = 0, minTs = 0, maxTs = 0;
+    let customSpeed = null, customStep = null;
+    let mapping = { city:'', lng:'', lat:'', start:'', end:'', duration:'', order:'' };
+    let startSorted = [], endSorted = [], activeSet = new Set(), startIdx = 0, endIdx = 0;
+    let selectionMode = false, selectionStartLatLng = null, selectionRectangle = null, selectionBounds = null;
+
+    function t(key, vars) { let value = (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; if (vars) Object.keys(vars).forEach(k => { value = value.replace('{' + k + '}', vars[k]); }); return value; }
+    function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify({ lang: currentLang, speed, stepSeconds, customSpeed, customStep, mapping })); }
+    function loadConfig() { try { const raw = localStorage.getItem(CONFIG_KEY); if (!raw) return; const cfg = JSON.parse(raw); if (cfg.lang === 'zh' || cfg.lang === 'en') currentLang = cfg.lang; if (Number.isFinite(cfg.speed) && cfg.speed > 0) speed = cfg.speed; if (Number.isFinite(cfg.stepSeconds) && cfg.stepSeconds > 0) stepSeconds = Math.floor(cfg.stepSeconds); if (Number.isFinite(cfg.customSpeed) && cfg.customSpeed > 0) customSpeed = cfg.customSpeed; if (Number.isFinite(cfg.customStep) && cfg.customStep > 0) customStep = Math.floor(cfg.customStep); if (cfg.mapping && typeof cfg.mapping === 'object') mapping = Object.assign(mapping, cfg.mapping); } catch (_) {} }
+
+    function applyI18n() {
+      document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+      document.title = t('title');
+      ['appTitle','appDesc','languageLabel','uploadLabel','uploadHint','sheetSelectLabel','playbackControlsTitle','timelineLabel','currentTimeLabel','totalCountLabel','activeCountLabel','pendingCountLabel','finishedCountLabel','dataSummaryTitle','summaryStartLabel','summaryEndLabel','summaryDurationLabel','timezoneLabel','timezoneDesc','emptyTitle','emptyDesc','statusTitle','mappingTitle','mapCityLabel','mapOrderLabel','mapLngLabel','mapLatLabel','mapStartLabel','mapEndLabel','mapDurationLabel','exportTitle','selectionStatsTitle','selectionTotalLabel','selectionActiveLabel','selectionPendingLabel','selectionFinishedLabel'].forEach(function(id){
+        const keyMap = { appTitle:'title',appDesc:'desc',languageLabel:'language',uploadLabel:'upload',uploadHint:'uploadHint',sheetSelectLabel:'sheetSelect',playbackControlsTitle:'controls',timelineLabel:'timeline',currentTimeLabel:'currentTime',totalCountLabel:'total',activeCountLabel:'active',pendingCountLabel:'pending',finishedCountLabel:'finished',dataSummaryTitle:'summary',summaryStartLabel:'start',summaryEndLabel:'end',summaryDurationLabel:'duration',timezoneLabel:'timezone',timezoneDesc:'timezoneDesc',emptyTitle:'emptyTitle',emptyDesc:'emptyDesc',statusTitle:'statusTitle',mappingTitle:'mappingTitle',mapCityLabel:'mapCity',mapOrderLabel:'mapOrder',mapLngLabel:'mapLng',mapLatLabel:'mapLat',mapStartLabel:'mapStart',mapEndLabel:'mapEnd',mapDurationLabel:'mapDuration',exportTitle:'export',selectionStatsTitle:'selectionStats',selectionTotalLabel:'total',selectionActiveLabel:'active',selectionPendingLabel:'pending',selectionFinishedLabel:'finished' };
+        const el = document.getElementById(id); if (el) el.textContent = t(keyMap[id]);
+      });
+      document.getElementById('playBtn').textContent = t('play'); document.getElementById('pauseBtn').textContent = t('pause'); document.getElementById('resetBtn').textContent = t('reset'); document.getElementById('endBtn').textContent = t('jumpToEnd');
+      document.getElementById('speedLabel').textContent = t('speed'); document.getElementById('stepLabel').textContent = t('step');
+      document.getElementById('setCustomSpeedBtn').textContent = t('set'); document.getElementById('setCustomStepBtn').textContent = t('set');
+      document.getElementById('customSpeedInput').placeholder = t('customPlaceholderSpeed'); document.getElementById('customStepInput').placeholder = t('customPlaceholderStep');
+      document.getElementById('applyMappingBtn').textContent = t('applyMapping');
+      document.getElementById('exportGeoJsonBtn').textContent = t('exportGeoJson'); document.getElementById('exportKmlBtn').textContent = t('exportKml');
+      document.getElementById('selectBoxBtn').textContent = t('boxSelect'); document.getElementById('clearBoxBtn').textContent = t('clearBox');
+      renderSpeedButtons(); renderStepButtons();
+      if (currentSheetName) document.getElementById('sheetName').textContent = t('currentSheet', { name: currentSheetName });
+      if (records.length) renderAtCursor();
+    }
 
     function initMap() {
       map = L.map('map', { zoomControl: false }).setView([35.8617, 104.1954], 5);
       L.control.zoom({ position: 'topright' }).addTo(map);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-      markersLayer = L.layerGroup().addTo(map);
-      polylineLayer = L.layerGroup().addTo(map);
-    }
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map); polylineLayer = L.layerGroup().addTo(map);
 
-    function normalizeHeader(value) {
-      return String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+      map.on('mousedown', function(e) {
+        if (!selectionMode) return;
+        selectionStartLatLng = e.latlng;
+        if (selectionRectangle) map.removeLayer(selectionRectangle);
+        selectionRectangle = L.rectangle([selectionStartLatLng, selectionStartLatLng], { color: '#0ea5e9', weight: 2, dashArray: '4 4' }).addTo(map);
+        map.dragging.disable();
+      });
+      map.on('mousemove', function(e) {
+        if (!selectionMode || !selectionStartLatLng || !selectionRectangle) return;
+        selectionRectangle.setBounds(L.latLngBounds(selectionStartLatLng, e.latlng));
+      });
+      map.on('mouseup', function(e) {
+        if (!selectionMode || !selectionStartLatLng) return;
+        selectionBounds = L.latLngBounds(selectionStartLatLng, e.latlng);
+        if (selectionRectangle) selectionRectangle.setBounds(selectionBounds);
+        selectionMode = false;
+        selectionStartLatLng = null;
+        map.dragging.enable();
+        document.getElementById('selectBoxBtn').classList.remove('selection-active');
+        updateSelectionStats();
+      });
     }
+    function normalizeHeader(v){ return String(v || '').trim().replace(/\s+/g, '').toLowerCase(); }
+    function findHeaderKey(hs, aliases){ const nh = hs.map(normalizeHeader); for (const alias of aliases){ const idx = nh.indexOf(normalizeHeader(alias)); if (idx !== -1) return hs[idx]; } return ''; }
+    function formatDateTime(date){ if (!date || Number.isNaN(date.getTime())) return '-'; const local8 = new Date(date.getTime() + 8 * 3600 * 1000); const y = local8.getUTCFullYear(); const m = String(local8.getUTCMonth()+1).padStart(2,'0'); const d = String(local8.getUTCDate()).padStart(2,'0'); const hh = String(local8.getUTCHours()).padStart(2,'0'); const mm = String(local8.getUTCMinutes()).padStart(2,'0'); const ss = String(local8.getUTCSeconds()).padStart(2,'0'); return y+'-'+m+'-'+d+' '+hh+':'+mm+':'+ss+' UTC+8'; }
+    function formatDuration(sec){ if (!Number.isFinite(sec) || sec < 0) return '-'; const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60); return currentLang==='zh' ? h+'小时 '+m+'分 '+s+'秒' : h+'h '+m+'m '+s+'s'; }
 
-    function findHeaderKey(headers, aliases) {
-      const normalizedHeaders = headers.map(normalizeHeader);
-      for (const alias of aliases) {
-        const idx = normalizedHeaders.indexOf(normalizeHeader(alias));
-        if (idx !== -1) return headers[idx];
-      }
-      return null;
+    function excelSerialToUtc8Date(serial) {
+      const totalMs = Math.round((serial - 25569) * 86400 * 1000);
+      return new Date(totalMs - 8 * 3600 * 1000);
     }
-
-    function formatDateTime(date) {
-      if (!date || Number.isNaN(date.getTime())) return '-';
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      const hh = String(date.getHours()).padStart(2, '0');
-      const mm = String(date.getMinutes()).padStart(2, '0');
-      const ss = String(date.getSeconds()).padStart(2, '0');
-      return y + '-' + m + '-' + d + ' ' + hh + ':' + mm + ':' + ss;
+    function parseStringToUtc8Date(text) {
+      const s = String(text || '').trim();
+      if (!s) return null;
+      const m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T](\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/);
+      if (!m) return null;
+      const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]), hh = Number(m[4] || 0), mm = Number(m[5] || 0), ss = Number(m[6] || 0);
+      const utcMs = Date.UTC(y, mo, d, hh - 8, mm, ss);
+      const dt = new Date(utcMs);
+      return Number.isNaN(dt.getTime()) ? null : dt;
     }
+    function parseExcelDate(value){ if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value.getTime() - 8 * 3600 * 1000); if (typeof value === 'number' && Number.isFinite(value)) return excelSerialToUtc8Date(value); if (typeof value === 'string') { if (/^\d+(\.\d+)?$/.test(value.trim())) return excelSerialToUtc8Date(Number(value)); return parseStringToUtc8Date(value); } return null; }
 
-    function formatDuration(seconds) {
-      if (!Number.isFinite(seconds) || seconds < 0) return '-';
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      const s = Math.floor(seconds % 60);
-      return h + 'h ' + m + 'm ' + s + 's';
-    }
-
-    function excelSerialToDate(serial) {
-      const utcDays = Math.floor(serial - 25569);
-      const utcValue = utcDays * 86400;
-      const fractionalDay = serial - Math.floor(serial) + 0.0000001;
-      const totalSeconds = Math.floor(86400 * fractionalDay);
-      const dateInfo = new Date(utcValue * 1000);
-      return new Date(
-        dateInfo.getUTCFullYear(),
-        dateInfo.getUTCMonth(),
-        dateInfo.getUTCDate(),
-        Math.floor(totalSeconds / 3600),
-        Math.floor((totalSeconds % 3600) / 60),
-        totalSeconds % 60
-      );
-    }
-
-    function parseExcelDate(value) {
-      if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-      if (typeof value === 'number' && Number.isFinite(value)) return excelSerialToDate(value);
-      if (typeof value === 'string') {
-        const text = value.trim();
-        if (!text) return null;
-        if (/^\d+(\.\d+)?$/.test(text)) return excelSerialToDate(Number(text));
-        const normalized = text.replace(/\//g, '-');
-        const parsed = new Date(normalized);
-        if (!Number.isNaN(parsed.getTime())) return parsed;
-      }
-      return null;
-    }
-
-    function showError(message) {
-      const box = document.getElementById('errorBox');
-      box.textContent = message;
-      box.style.display = 'block';
-    }
-
-    function clearError() {
-      const box = document.getElementById('errorBox');
-      box.textContent = '';
-      box.style.display = 'none';
-    }
-
-    function setControlsEnabled(enabled) {
-      document.getElementById('playBtn').disabled = !enabled;
-      document.getElementById('pauseBtn').disabled = !enabled;
-      document.getElementById('resetBtn').disabled = !enabled;
-      document.getElementById('endBtn').disabled = !enabled;
-      document.getElementById('timeRange').disabled = !enabled;
-    }
-
-    function fitMapBounds(points) {
-      if (!points.length) return;
-      const bounds = L.latLngBounds(points.map(function(p){ return [p.lat, p.lng]; }));
-      map.fitBounds(bounds, { padding: [40, 40] });
-    }
-
-    function stopPlayback() {
-      if (playbackTimer) {
-        clearInterval(playbackTimer);
-        playbackTimer = null;
-      }
-    }
-
-    function startPlayback() {
+    function showError(msg){ const box=document.getElementById('errorBox'); box.textContent = msg; box.style.display='block'; }
+    function clearError(){ const box=document.getElementById('errorBox'); box.textContent=''; box.style.display='none'; }
+    function setControlsEnabled(enabled){ ['playBtn','pauseBtn','resetBtn','endBtn','timeRange','exportGeoJsonBtn','exportKmlBtn','selectBoxBtn','clearBoxBtn'].forEach(id => document.getElementById(id).disabled = !enabled); }
+    function fitMapBounds(points){ if (!points.length) return; const bounds = L.latLngBounds(points.map(p => [p.lat,p.lng])); map.fitBounds(bounds, { padding: [40,40] }); }
+    function stopPlayback(){ if (playbackTimer){ clearInterval(playbackTimer); playbackTimer = null; } }
+    function startPlayback(){
       if (!records.length || playbackTimer) return;
-      playbackTimer = setInterval(function() {
-        cursor += stepSeconds * 1000 * speed;
-        if (cursor >= maxTs) {
-          cursor = maxTs;
-          stopPlayback();
-        }
+      if (cursor >= maxTs) {
+        initTimelineIndex();
+        cursor = minTs;
         renderAtCursor();
-      }, 350);
+      }
+      playbackTimer = setInterval(function(){ cursor += stepSeconds * 1000 * speed; if (cursor >= maxTs){ cursor = maxTs; stopPlayback(); } renderAtCursor(); }, 350);
     }
 
-    function getActiveRecords() {
-      return records.filter(function(r){ return r.start.getTime() <= cursor && r.end.getTime() >= cursor; });
+    function initTimelineIndex() {
+      startSorted = records.slice().sort((a,b) => a.start - b.start);
+      endSorted = records.slice().sort((a,b) => a.end - b.end);
+      activeSet = new Set(); startIdx = 0; endIdx = 0;
+    }
+    function seekCursor(newCursor) {
+      if (newCursor < cursor) {
+        activeSet.clear(); startIdx = 0; endIdx = 0;
+        while (startIdx < startSorted.length && startSorted[startIdx].start.getTime() <= newCursor) { activeSet.add(startSorted[startIdx].id); startIdx += 1; }
+        while (endIdx < endSorted.length && endSorted[endIdx].end.getTime() < newCursor) { activeSet.delete(endSorted[endIdx].id); endIdx += 1; }
+      } else {
+        while (startIdx < startSorted.length && startSorted[startIdx].start.getTime() <= newCursor) { activeSet.add(startSorted[startIdx].id); startIdx += 1; }
+        while (endIdx < endSorted.length && endSorted[endIdx].end.getTime() < newCursor) { activeSet.delete(endSorted[endIdx].id); endIdx += 1; }
+      }
+      cursor = newCursor;
     }
 
     function renderAtCursor() {
-      markersLayer.clearLayers();
-      polylineLayer.clearLayers();
-
-      const active = getActiveRecords().sort(function(a, b){ return a.start - b.start; });
-      const latestStart = active.length ? Math.max.apply(null, active.map(function(r){ return r.start.getTime(); })) : null;
-
-      active.forEach(function(r) {
+      seekCursor(cursor);
+      const active = records.filter(r => activeSet.has(r.id)).sort((a,b) => a.start - b.start);
+      markersLayer.clearLayers(); polylineLayer.clearLayers();
+      const latestStart = active.length ? Math.max.apply(null, active.map(r => r.start.getTime())) : null;
+      active.forEach(function(r){
         const isLatest = latestStart !== null && r.start.getTime() === latestStart;
-        const marker = L.circleMarker([r.lat, r.lng], {
-          radius: 8,
-          color: isLatest ? '#7c2d12' : '#b91c1c',
-          weight: 2,
-          fillColor: isLatest ? '#ea580c' : '#ef4444',
-          fillOpacity: 0.72
-        });
-
-        marker.bindPopup(
-          '<div style="font-size:13px;line-height:1.6;min-width:220px;">' +
-            '<div><strong>地市：</strong>' + (r.city == null ? '-' : r.city) + '</div>' +
-            '<div><strong>经纬度：</strong>' + r.lng + ', ' + r.lat + '</div>' +
-            '<div><strong>开始：</strong>' + formatDateTime(r.start) + '</div>' +
-            '<div><strong>结束：</strong>' + formatDateTime(r.end) + '</div>' +
-            '<div><strong>持续：</strong>' + formatDuration(r.duration) + '</div>' +
-            '<div><strong>排序编号：</strong>' + (r.order == null ? '-' : r.order) + '</div>' +
-          '</div>'
-        );
+        const marker = L.circleMarker([r.lat, r.lng], { radius: 8, color: isLatest ? '#7c2d12' : '#b91c1c', weight: 2, fillColor: isLatest ? '#ea580c' : '#ef4444', fillOpacity: 0.72 });
+        marker.bindPopup('<div style="font-size:13px;line-height:1.6;min-width:220px;">' +
+          '<div><strong>' + t('popupCity') + ':</strong> ' + (r.city == null ? '-' : r.city) + '</div>' +
+          '<div><strong>' + t('popupCoord') + ':</strong> ' + r.lng + ', ' + r.lat + '</div>' +
+          '<div><strong>' + t('popupStart') + ':</strong> ' + formatDateTime(r.start) + '</div>' +
+          '<div><strong>' + t('popupEnd') + ':</strong> ' + formatDateTime(r.end) + '</div>' +
+          '<div><strong>' + t('popupDuration') + ':</strong> ' + formatDuration(r.duration) + '</div>' +
+          '<div><strong>' + t('popupOrder') + ':</strong> ' + (r.order == null ? '-' : r.order) + '</div>' + '</div>');
         marker.addTo(markersLayer);
       });
-
-      if (active.length >= 2) {
-        L.polyline(active.map(function(r){ return [r.lat, r.lng]; }), {
-          color: '#0369a1', weight: 3, opacity: 0.65, dashArray: '6 6'
-        }).addTo(polylineLayer);
-      }
-
+      if (active.length >= 2) L.polyline(active.map(r => [r.lat, r.lng]), { color: '#0369a1', weight: 3, opacity: 0.65, dashArray: '6 6' }).addTo(polylineLayer);
       document.getElementById('currentTime').textContent = formatDateTime(new Date(cursor));
       document.getElementById('statusTime').textContent = formatDateTime(new Date(cursor));
-      document.getElementById('statusDesc').textContent = '活跃告警 ' + active.length + ' 条，当前用虚线串起活跃点，方便观察干扰是否在地图上迁移。';
+      document.getElementById('statusDesc').textContent = t('activeStatus', { count: active.length });
       document.getElementById('activeCount').textContent = String(active.length);
-      document.getElementById('pendingCount').textContent = String(records.filter(function(r){ return r.start.getTime() > cursor; }).length);
-      document.getElementById('finishedCount').textContent = String(records.filter(function(r){ return r.end.getTime() < cursor; }).length);
+      document.getElementById('pendingCount').textContent = String(records.length - startIdx);
+      document.getElementById('finishedCount').textContent = String(endIdx);
       document.getElementById('timeRange').value = String(cursor);
       document.getElementById('statusPanel').style.display = 'block';
       document.getElementById('emptyState').style.display = 'none';
+      updateSelectionStats();
     }
 
-    function renderSpeedButtons() {
-      const wrap = document.getElementById('speedWrap');
-      wrap.innerHTML = '';
-      SPEED_OPTIONS.forEach(function(v) {
-        const btn = document.createElement('button');
-        btn.className = 'chip' + (v === speed ? ' active speed' : '');
-        btn.textContent = v + 'x';
-        btn.addEventListener('click', function() {
-          speed = v;
-          renderSpeedButtons();
-        });
-        wrap.appendChild(btn);
-      });
+    function updateSelectionStats() {
+      let selected = records;
+      if (selectionBounds) {
+        selected = records.filter(function(r) { return selectionBounds.contains([r.lat, r.lng]); });
+      }
+      const active = selected.filter(function(r){ return r.start.getTime() <= cursor && r.end.getTime() >= cursor; }).length;
+      const pending = selected.filter(function(r){ return r.start.getTime() > cursor; }).length;
+      const finished = selected.filter(function(r){ return r.end.getTime() < cursor; }).length;
+      document.getElementById('selectionTotalCount').textContent = String(selected.length);
+      document.getElementById('selectionActiveCount').textContent = String(active);
+      document.getElementById('selectionPendingCount').textContent = String(pending);
+      document.getElementById('selectionFinishedCount').textContent = String(finished);
     }
 
-    function renderStepButtons() {
-      const wrap = document.getElementById('stepWrap');
-      wrap.innerHTML = '';
-      STEP_OPTIONS.forEach(function(v) {
-        const btn = document.createElement('button');
-        btn.className = 'chip' + (v === stepSeconds ? ' active step' : '');
-        btn.textContent = v + 's';
-        btn.addEventListener('click', function() {
-          stepSeconds = v;
-          renderStepButtons();
-        });
-        wrap.appendChild(btn);
+    function renderSpeedButtons(){ const wrap = document.getElementById('speedWrap'); wrap.innerHTML = ''; const options = customSpeed && !SPEED_OPTIONS.includes(customSpeed) ? SPEED_OPTIONS.concat([customSpeed]) : SPEED_OPTIONS.slice(); options.sort((a,b)=>a-b); options.forEach(function(v){ const btn=document.createElement('button'); btn.className='chip'+(Math.abs(v-speed)<1e-9?' active speed':''); btn.textContent=v+t('speedUnit'); btn.addEventListener('click', function(){ speed=v; saveConfig(); renderSpeedButtons(); }); wrap.appendChild(btn); }); document.getElementById('customSpeedInput').value = customSpeed || ''; }
+    function renderStepButtons(){ const wrap = document.getElementById('stepWrap'); wrap.innerHTML = ''; const options = customStep && !STEP_OPTIONS.includes(customStep) ? STEP_OPTIONS.concat([customStep]) : STEP_OPTIONS.slice(); options.sort((a,b)=>a-b); options.forEach(function(v){ const btn=document.createElement('button'); btn.className='chip'+(v===stepSeconds?' active step':''); btn.textContent=v+t('stepUnit'); btn.addEventListener('click', function(){ stepSeconds=v; saveConfig(); renderStepButtons(); }); wrap.appendChild(btn); }); document.getElementById('customStepInput').value = customStep || ''; }
+
+    function setMappingSelectorsEnabled(enabled) { ['mapCity','mapOrder','mapLng','mapLat','mapStart','mapEnd','mapDuration','applyMappingBtn'].forEach(id => { document.getElementById(id).disabled = !enabled; }); }
+    function fillMappingOptions() {
+      const fields = ['mapCity','mapOrder','mapLng','mapLat','mapStart','mapEnd','mapDuration'];
+      fields.forEach(function(id){
+        const select = document.getElementById(id); select.innerHTML='';
+        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent=t('unmapped'); select.appendChild(noneOpt);
+        headers.forEach(function(h){ const opt = document.createElement('option'); opt.value = h; opt.textContent = h; select.appendChild(opt); });
       });
+      document.getElementById('mapCity').value = mapping.city || '';
+      document.getElementById('mapOrder').value = mapping.order || '';
+      document.getElementById('mapLng').value = mapping.lng || '';
+      document.getElementById('mapLat').value = mapping.lat || '';
+      document.getElementById('mapStart').value = mapping.start || '';
+      document.getElementById('mapEnd').value = mapping.end || '';
+      document.getElementById('mapDuration').value = mapping.duration || '';
+    }
+    function detectDefaultMapping() {
+      mapping.city = mapping.city && headers.includes(mapping.city) ? mapping.city : findHeaderKey(headers, FIELD_ALIASES.city);
+      mapping.lng = mapping.lng && headers.includes(mapping.lng) ? mapping.lng : findHeaderKey(headers, FIELD_ALIASES.lng);
+      mapping.lat = mapping.lat && headers.includes(mapping.lat) ? mapping.lat : findHeaderKey(headers, FIELD_ALIASES.lat);
+      mapping.start = mapping.start && headers.includes(mapping.start) ? mapping.start : findHeaderKey(headers, FIELD_ALIASES.start);
+      mapping.end = mapping.end && headers.includes(mapping.end) ? mapping.end : findHeaderKey(headers, FIELD_ALIASES.end);
+      mapping.duration = mapping.duration && headers.includes(mapping.duration) ? mapping.duration : findHeaderKey(headers, FIELD_ALIASES.duration);
+      mapping.order = mapping.order && headers.includes(mapping.order) ? mapping.order : findHeaderKey(headers, FIELD_ALIASES.order);
+    }
+
+    function parseSheet(sheetName) {
+      const sheet = workbookData.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+      if (!rows.length) throw new Error(t('parseNoData'));
+      const h = Object.keys(rows[0]);
+      const requiredMissing = [];
+      if (!mapping.lng) requiredMissing.push(t('fieldsLng'));
+      if (!mapping.lat) requiredMissing.push(t('fieldsLat'));
+      if (!mapping.start) requiredMissing.push(t('fieldsStart'));
+      if (!mapping.end) requiredMissing.push(t('fieldsEnd'));
+      if (requiredMissing.length) throw new Error(t('fieldMissing', { fields: requiredMissing.join(', ') }));
+
+      const parsed = rows.map(function(row, index){
+        const lat = Number(row[mapping.lat]); const lng = Number(row[mapping.lng]);
+        const start = parseExcelDate(row[mapping.start]); const end = parseExcelDate(row[mapping.end]);
+        const durationRaw = mapping.duration ? Number(row[mapping.duration]) : NaN;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || !start || !end || end < start) return null;
+        return { id: String(index) + '-' + String(start.getTime()) + '-' + String(lat) + '-' + String(lng), city: mapping.city ? row[mapping.city] : '-', lat, lng, start, end, duration: Number.isFinite(durationRaw) ? durationRaw : Math.max(0, Math.floor((end - start) / 1000)), order: mapping.order ? row[mapping.order] : null };
+      }).filter(Boolean).sort((a,b) => a.start - b.start);
+      if (!parsed.length) throw new Error(t('parseNoValid'));
+      return { parsed, headers: h, rows };
+    }
+
+    function renderSheetSelector() {
+      const select = document.getElementById('sheetSelect'); select.innerHTML = '';
+      workbookData.SheetNames.forEach(function(name){ const opt = document.createElement('option'); opt.value=name; opt.textContent=name; select.appendChild(opt); });
+      select.value = workbookData.SheetNames[0]; select.disabled = false;
+    }
+
+    function applySheet(sheetName) {
+      stopPlayback(); markersLayer.clearLayers(); polylineLayer.clearLayers();
+      currentSheetName = sheetName;
+      const rows = XLSX.utils.sheet_to_json(workbookData.Sheets[sheetName], { defval: null, raw: true });
+      if (!rows.length) throw new Error(t('parseNoData'));
+      headers = Object.keys(rows[0]); sheetRows = rows;
+      detectDefaultMapping(); fillMappingOptions();
+      setMappingSelectorsEnabled(true);
+      applyMappingAndRender();
+    }
+
+    function applyMappingAndRender() {
+      const result = parseSheet(currentSheetName);
+      records = result.parsed;
+      minTs = records[0].start.getTime(); maxTs = Math.max.apply(null, records.map(r => r.end.getTime())); cursor = minTs;
+      initTimelineIndex(); seekCursor(cursor);
+      document.getElementById('sheetName').textContent = t('currentSheet', { name: currentSheetName });
+      document.getElementById('totalCount').textContent = String(records.length);
+      document.getElementById('summaryStart').textContent = formatDateTime(records[0].start);
+      document.getElementById('summaryEnd').textContent = formatDateTime(new Date(maxTs));
+      document.getElementById('summaryDuration').textContent = formatDuration(Math.floor((maxTs - minTs) / 1000));
+      const range = document.getElementById('timeRange'); range.min = String(minTs); range.max = String(maxTs); range.value = String(cursor);
+      setControlsEnabled(true); fitMapBounds(records); renderAtCursor(); saveConfig();
+    }
+
+    function resetStateWithError(msg) {
+      records = []; currentSheetName = ''; minTs = 0; maxTs = 0; cursor = 0;
+      setControlsEnabled(false); setMappingSelectorsEnabled(false);
+      selectionMode = false; selectionBounds = null; selectionStartLatLng = null;
+      if (selectionRectangle) { map.removeLayer(selectionRectangle); selectionRectangle = null; }
+      document.getElementById('selectBoxBtn').classList.remove('selection-active');
+      document.getElementById('sheetName').textContent = ''; document.getElementById('totalCount').textContent = '0'; document.getElementById('activeCount').textContent = '0'; document.getElementById('pendingCount').textContent = '0'; document.getElementById('finishedCount').textContent = '0'; document.getElementById('currentTime').textContent = '-'; document.getElementById('summaryStart').textContent = '-'; document.getElementById('summaryEnd').textContent = '-'; document.getElementById('summaryDuration').textContent = '-'; document.getElementById('statusPanel').style.display = 'none'; document.getElementById('emptyState').style.display = 'flex'; showError(msg);
+      document.getElementById('selectionTotalCount').textContent = '0'; document.getElementById('selectionActiveCount').textContent = '0'; document.getElementById('selectionPendingCount').textContent = '0'; document.getElementById('selectionFinishedCount').textContent = '0';
     }
 
     function parseWorkbook(file) {
-      return new Promise(function(resolve, reject) {
+      return new Promise(function(resolve, reject){
         const reader = new FileReader();
-        reader.onload = function(e) {
-          try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: true });
-            const firstSheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[firstSheetName];
-            const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
-
-            if (!rows.length) {
-              reject(new Error('Excel 里没有可用数据。'));
-              return;
-            }
-
-            const headers = Object.keys(rows[0]);
-            const cityKey = findHeaderKey(headers, FIELD_ALIASES.city);
-            const lngKey = findHeaderKey(headers, FIELD_ALIASES.lng);
-            const latKey = findHeaderKey(headers, FIELD_ALIASES.lat);
-            const startKey = findHeaderKey(headers, FIELD_ALIASES.start);
-            const endKey = findHeaderKey(headers, FIELD_ALIASES.end);
-            const durationKey = findHeaderKey(headers, FIELD_ALIASES.duration);
-            const orderKey = findHeaderKey(headers, FIELD_ALIASES.order);
-
-            const missing = [];
-            if (!lngKey) missing.push('经度');
-            if (!latKey) missing.push('纬度');
-            if (!startKey) missing.push('告警发生时间');
-            if (!endKey) missing.push('告警消除时间');
-            if (missing.length) {
-              reject(new Error('缺少关键字段：' + missing.join('、')));
-              return;
-            }
-
-            const parsed = rows.map(function(row, index) {
-              const lat = Number(row[latKey]);
-              const lng = Number(row[lngKey]);
-              const start = parseExcelDate(row[startKey]);
-              const end = parseExcelDate(row[endKey]);
-              const durationRaw = durationKey ? Number(row[durationKey]) : NaN;
-
-              if (!Number.isFinite(lat) || !Number.isFinite(lng) || !start || !end || end < start) {
-                return null;
-              }
-
-              return {
-                id: index + '-' + lat + '-' + lng + '-' + start.getTime(),
-                city: cityKey ? row[cityKey] : '-',
-                lat: lat,
-                lng: lng,
-                start: start,
-                end: end,
-                duration: Number.isFinite(durationRaw) ? durationRaw : Math.max(0, Math.floor((end - start) / 1000)),
-                order: orderKey ? row[orderKey] : null,
-                raw: row
-              };
-            }).filter(Boolean).sort(function(a, b){ return a.start - b.start; });
-
-            if (!parsed.length) {
-              reject(new Error('没有解析出有效记录。请检查经纬度和时间字段格式。'));
-              return;
-            }
-
-            resolve({ sheetName: firstSheetName, rows: parsed });
-          } catch (error) {
-            reject(error);
-          }
-        };
-        reader.onerror = function() {
-          reject(new Error('文件读取失败。'));
-        };
+        reader.onload = function(e){ try { resolve(XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: false, raw: true })); } catch (error) { reject(error); } };
+        reader.onerror = function(){ reject(new Error(t('readFail'))); };
         reader.readAsArrayBuffer(file);
       });
     }
 
+    function downloadText(content, filename, type) {
+      const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    }
+
+    function exportGeoJson() {
+      if (!records.length) return;
+      const geo = { type: 'FeatureCollection', features: records.map(function(r){ return { type:'Feature', properties:{ city:r.city, start:formatDateTime(r.start), end:formatDateTime(r.end), duration:r.duration, order:r.order }, geometry:{ type:'Point', coordinates:[r.lng, r.lat] } }; }) };
+      downloadText(JSON.stringify(geo, null, 2), 'replay_points.geojson', 'application/geo+json;charset=utf-8');
+    }
+
+    function escapeXml(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function exportKml() {
+      if (!records.length) return;
+      const placemarks = records.map(function(r){
+        return '<Placemark>' +
+          '<name>' + escapeXml(r.city || 'Point') + '</name>' +
+          '<description>' + escapeXml(t('popupStart') + ': ' + formatDateTime(r.start) + '\n' + t('popupEnd') + ': ' + formatDateTime(r.end)) + '</description>' +
+          '<Point><coordinates>' + r.lng + ',' + r.lat + ',0</coordinates></Point>' +
+          '</Placemark>';
+      }).join('');
+      const kml = '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Replay Export</name>' + placemarks + '</Document></kml>';
+      downloadText(kml, 'replay_points.kml', 'application/vnd.google-earth.kml+xml;charset=utf-8');
+    }
+
     async function handleFile(file) {
       clearError();
-      stopPlayback();
-      markersLayer.clearLayers();
-      polylineLayer.clearLayers();
-      try {
-        const parsed = await parseWorkbook(file);
-        records = parsed.rows;
-        minTs = records[0].start.getTime();
-        maxTs = Math.max.apply(null, records.map(function(r){ return r.end.getTime(); }));
-        cursor = minTs;
-
-        document.getElementById('sheetName').textContent = '当前工作表：' + parsed.sheetName;
-        document.getElementById('totalCount').textContent = String(records.length);
-        document.getElementById('summaryStart').textContent = formatDateTime(records[0].start);
-        document.getElementById('summaryEnd').textContent = formatDateTime(new Date(maxTs));
-        document.getElementById('summaryDuration').textContent = formatDuration(Math.floor((maxTs - minTs) / 1000));
-
-        const range = document.getElementById('timeRange');
-        range.min = String(minTs);
-        range.max = String(maxTs);
-        range.value = String(cursor);
-
-        setControlsEnabled(true);
-        fitMapBounds(records);
-        renderAtCursor();
-      } catch (error) {
-        records = [];
-        minTs = 0;
-        maxTs = 0;
-        cursor = 0;
-        setControlsEnabled(false);
-        document.getElementById('sheetName').textContent = '';
-        document.getElementById('totalCount').textContent = '0';
-        document.getElementById('activeCount').textContent = '0';
-        document.getElementById('pendingCount').textContent = '0';
-        document.getElementById('finishedCount').textContent = '0';
-        document.getElementById('currentTime').textContent = '-';
-        document.getElementById('summaryStart').textContent = '-';
-        document.getElementById('summaryEnd').textContent = '-';
-        document.getElementById('summaryDuration').textContent = '-';
-        document.getElementById('statusPanel').style.display = 'none';
-        document.getElementById('emptyState').style.display = 'flex';
-        showError(error && error.message ? error.message : '解析失败。');
-      }
+      try { workbookData = await parseWorkbook(file); renderSheetSelector(); applySheet(workbookData.SheetNames[0]); }
+      catch (error) { resetStateWithError(error && error.message ? error.message : t('parseFail')); }
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      initMap();
-      renderSpeedButtons();
-      renderStepButtons();
-      setControlsEnabled(false);
+      loadConfig(); initMap(); applyI18n(); setControlsEnabled(false); setMappingSelectorsEnabled(false);
+      document.getElementById('languageSelect').value = currentLang;
 
-      document.getElementById('fileInput').addEventListener('change', function(e) {
-        const file = e.target.files && e.target.files[0];
-        if (file) handleFile(file);
+      document.getElementById('languageSelect').addEventListener('change', function(e){ currentLang = e.target.value || 'en'; saveConfig(); applyI18n(); });
+      document.getElementById('fileInput').addEventListener('change', function(e){ const file = e.target.files && e.target.files[0]; if (file) handleFile(file); });
+      document.getElementById('sheetSelect').addEventListener('change', function(e){ if (!workbookData) return; clearError(); try { applySheet(e.target.value); } catch (error) { resetStateWithError(error && error.message ? error.message : t('parseFail')); } });
+
+      document.getElementById('applyMappingBtn').addEventListener('click', function() {
+        mapping.city = document.getElementById('mapCity').value;
+        mapping.order = document.getElementById('mapOrder').value;
+        mapping.lng = document.getElementById('mapLng').value;
+        mapping.lat = document.getElementById('mapLat').value;
+        mapping.start = document.getElementById('mapStart').value;
+        mapping.end = document.getElementById('mapEnd').value;
+        mapping.duration = document.getElementById('mapDuration').value;
+        clearError();
+        try { applyMappingAndRender(); } catch (error) { resetStateWithError(error && error.message ? error.message : t('parseFail')); }
       });
+
+      document.getElementById('setCustomSpeedBtn').addEventListener('click', function(){ const v = Number(document.getElementById('customSpeedInput').value); if (!Number.isFinite(v) || v <= 0) return; customSpeed = v; speed = v; saveConfig(); renderSpeedButtons(); });
+      document.getElementById('setCustomStepBtn').addEventListener('click', function(){ const v = Math.floor(Number(document.getElementById('customStepInput').value)); if (!Number.isFinite(v) || v <= 0) return; customStep = v; stepSeconds = v; saveConfig(); renderStepButtons(); });
+
       document.getElementById('playBtn').addEventListener('click', startPlayback);
       document.getElementById('pauseBtn').addEventListener('click', stopPlayback);
-      document.getElementById('resetBtn').addEventListener('click', function() {
+      document.getElementById('resetBtn').addEventListener('click', function(){
         if (!records.length) return;
         stopPlayback();
+        markersLayer.clearLayers();
+        polylineLayer.clearLayers();
+        initTimelineIndex();
         cursor = minTs;
         renderAtCursor();
       });
-      document.getElementById('endBtn').addEventListener('click', function() {
+      document.getElementById('endBtn').addEventListener('click', function(){ if (!records.length) return; stopPlayback(); cursor = maxTs; renderAtCursor(); });
+      document.getElementById('timeRange').addEventListener('input', function(e){ if (!records.length) return; stopPlayback(); cursor = Number(e.target.value); renderAtCursor(); });
+      document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJson);
+      document.getElementById('exportKmlBtn').addEventListener('click', exportKml);
+      document.getElementById('selectBoxBtn').addEventListener('click', function() {
         if (!records.length) return;
-        stopPlayback();
-        cursor = maxTs;
-        renderAtCursor();
+        selectionMode = !selectionMode;
+        document.getElementById('selectBoxBtn').classList.toggle('selection-active', selectionMode);
+        if (!selectionMode && map) {
+          selectionStartLatLng = null;
+          map.dragging.enable();
+        }
       });
-      document.getElementById('timeRange').addEventListener('input', function(e) {
-        if (!records.length) return;
-        stopPlayback();
-        cursor = Number(e.target.value);
-        renderAtCursor();
+      document.getElementById('clearBoxBtn').addEventListener('click', function() {
+        selectionMode = false;
+        selectionBounds = null;
+        selectionStartLatLng = null;
+        document.getElementById('selectBoxBtn').classList.remove('selection-active');
+        if (selectionRectangle && map) {
+          map.removeLayer(selectionRectangle);
+          selectionRectangle = null;
+        }
+        if (map) map.dragging.enable();
+        updateSelectionStats();
       });
+
+      renderSpeedButtons(); renderStepButtons();
     });
   </script>
 </body>
