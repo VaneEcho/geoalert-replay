@@ -67,4 +67,4 @@ OpenStreetMap attribution is preserved as required by the license.
 
 ## License
 
-MIT License
+Apache License 2.0
