@@ -43,6 +43,7 @@
     input[type="number"], select { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; background: #fff; }
     .kv { display: grid; grid-template-columns: 90px 1fr; gap: 8px; font-size: 14px; line-height: 1.6; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .selection-active { background: #0ea5e9 !important; color: #fff !important; border-color: #0284c7 !important; }
     .leaflet-top.leaflet-right { top: 16px; right: 16px; }
     @media (max-width: 960px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -133,6 +134,10 @@
           <button id="exportGeoJsonBtn" class="btn" disabled>Export GeoJSON</button>
           <button id="exportKmlBtn" class="btn" disabled>Export KML</button>
         </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="selectBoxBtn" class="btn" disabled>Box Select</button>
+          <button id="clearBoxBtn" class="btn" disabled>Clear Box</button>
+        </div>
       </div>
 
       <div class="stats">
@@ -140,6 +145,16 @@
         <div class="stat"><div id="activeCountLabel" class="label">Active</div><div id="activeCount" class="value" style="color:#dc2626;">0</div></div>
         <div class="stat"><div id="pendingCountLabel" class="label">Pending</div><div id="pendingCount" class="value" style="color:#334155;">0</div></div>
         <div class="stat"><div id="finishedCountLabel" class="label">Finished</div><div id="finishedCount" class="value" style="color:#047857;">0</div></div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2 id="selectionStatsTitle">Selection Stats</h2>
+        <div class="stats">
+          <div class="stat"><div id="selectionTotalLabel" class="label">Total Records</div><div id="selectionTotalCount" class="value">0</div></div>
+          <div class="stat"><div id="selectionActiveLabel" class="label">Active</div><div id="selectionActiveCount" class="value" style="color:#dc2626;">0</div></div>
+          <div class="stat"><div id="selectionPendingLabel" class="label">Pending</div><div id="selectionPendingCount" class="value" style="color:#334155;">0</div></div>
+          <div class="stat"><div id="selectionFinishedLabel" class="label">Finished</div><div id="selectionFinishedCount" class="value" style="color:#047857;">0</div></div>
+        </div>
       </div>
 
       <div class="card" style="margin-top: 16px;">
@@ -178,7 +193,7 @@
         controls: 'Playback Controls', play: 'Play', pause: 'Pause', reset: 'Reset', jumpToEnd: 'Jump to End', speed: 'Playback Speed', step: 'Time Step', timeline: 'Timeline', currentTime: 'Current Time:',
         total: 'Total Records', active: 'Active', pending: 'Pending', finished: 'Finished', summary: 'Data Summary', start: 'Start', end: 'End', duration: 'Duration', timezone: 'Timezone', timezoneDesc: 'Interpret input timestamps as UTC+8.',
         emptyTitle: 'Upload Excel first', emptyDesc: 'After upload, points are replayed by time. The map only shows records active at the current moment.', statusTitle: 'Replay Status',
-        speedUnit: 'x', stepUnit: 's', set: 'Set', export:'Export', exportGeoJson:'Export GeoJSON', exportKml:'Export KML',
+        speedUnit: 'x', stepUnit: 's', set: 'Set', export:'Export', exportGeoJson:'Export GeoJSON', exportKml:'Export KML', boxSelect:'Box Select', clearBox:'Clear Box', selectionStats:'Selection Stats',
         activeStatus: 'Active alerts: {count}. Dashed lines connect active points to observe movement trends.',
         popupCity: 'City', popupCoord: 'Coordinates', popupStart: 'Start', popupEnd: 'End', popupDuration: 'Duration', popupOrder: 'Order',
         currentSheet: 'Current worksheet: {name}', parseNoData: 'No usable data found in the worksheet.', parseNoValid: 'No valid records were parsed. Please check data format.', readFail: 'Failed to read file.', parseFail: 'Parsing failed.',
@@ -193,7 +208,7 @@
         controls: '回放控制', play: '播放', pause: '暂停', reset: '回到起点', jumpToEnd: '跳到终点', speed: '回放倍速', step: '时间步长', timeline: '时间轴', currentTime: '当前时间：',
         total: '总记录数', active: '当前活跃', pending: '尚未开始', finished: '已结束', summary: '数据摘要', start: '开始时间', end: '结束时间', duration: '总时长', timezone: '时区', timezoneDesc: '按 UTC+8 解释输入时间。',
         emptyTitle: '先上传 Excel', emptyDesc: '上传后会按时间回放点位，地图上仅显示当前时刻还在告警持续区间内的记录。', statusTitle: '回放状态',
-        speedUnit: 'x', stepUnit: '秒', set: '设置', export:'导出', exportGeoJson:'导出 GeoJSON', exportKml:'导出 KML',
+        speedUnit: 'x', stepUnit: '秒', set: '设置', export:'导出', exportGeoJson:'导出 GeoJSON', exportKml:'导出 KML', boxSelect:'框选统计', clearBox:'清除框选', selectionStats:'框选范围统计',
         activeStatus: '活跃告警 {count} 条，当前用虚线串起活跃点，方便观察干扰是否在地图上迁移。',
         popupCity: '地市', popupCoord: '经纬度', popupStart: '开始', popupEnd: '结束', popupDuration: '持续', popupOrder: '排序编号',
         currentSheet: '当前工作表：{name}', parseNoData: '工作表中没有可用数据。', parseNoValid: '没有解析出有效记录，请检查数据格式。', readFail: '文件读取失败。', parseFail: '解析失败。',
@@ -216,6 +231,7 @@
     let customSpeed = null, customStep = null;
     let mapping = { city:'', lng:'', lat:'', start:'', end:'', duration:'', order:'' };
     let startSorted = [], endSorted = [], activeSet = new Set(), startIdx = 0, endIdx = 0;
+    let selectionMode = false, selectionStartLatLng = null, selectionRectangle = null, selectionBounds = null;
 
     function t(key, vars) { let value = (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; if (vars) Object.keys(vars).forEach(k => { value = value.replace('{' + k + '}', vars[k]); }); return value; }
     function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify({ lang: currentLang, speed, stepSeconds, customSpeed, customStep, mapping })); }
@@ -224,8 +240,8 @@
     function applyI18n() {
       document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
       document.title = t('title');
-      ['appTitle','appDesc','languageLabel','uploadLabel','uploadHint','sheetSelectLabel','playbackControlsTitle','timelineLabel','currentTimeLabel','totalCountLabel','activeCountLabel','pendingCountLabel','finishedCountLabel','dataSummaryTitle','summaryStartLabel','summaryEndLabel','summaryDurationLabel','timezoneLabel','timezoneDesc','emptyTitle','emptyDesc','statusTitle','mappingTitle','mapCityLabel','mapOrderLabel','mapLngLabel','mapLatLabel','mapStartLabel','mapEndLabel','mapDurationLabel','exportTitle'].forEach(function(id){
-        const keyMap = { appTitle:'title',appDesc:'desc',languageLabel:'language',uploadLabel:'upload',uploadHint:'uploadHint',sheetSelectLabel:'sheetSelect',playbackControlsTitle:'controls',timelineLabel:'timeline',currentTimeLabel:'currentTime',totalCountLabel:'total',activeCountLabel:'active',pendingCountLabel:'pending',finishedCountLabel:'finished',dataSummaryTitle:'summary',summaryStartLabel:'start',summaryEndLabel:'end',summaryDurationLabel:'duration',timezoneLabel:'timezone',timezoneDesc:'timezoneDesc',emptyTitle:'emptyTitle',emptyDesc:'emptyDesc',statusTitle:'statusTitle',mappingTitle:'mappingTitle',mapCityLabel:'mapCity',mapOrderLabel:'mapOrder',mapLngLabel:'mapLng',mapLatLabel:'mapLat',mapStartLabel:'mapStart',mapEndLabel:'mapEnd',mapDurationLabel:'mapDuration',exportTitle:'export' };
+      ['appTitle','appDesc','languageLabel','uploadLabel','uploadHint','sheetSelectLabel','playbackControlsTitle','timelineLabel','currentTimeLabel','totalCountLabel','activeCountLabel','pendingCountLabel','finishedCountLabel','dataSummaryTitle','summaryStartLabel','summaryEndLabel','summaryDurationLabel','timezoneLabel','timezoneDesc','emptyTitle','emptyDesc','statusTitle','mappingTitle','mapCityLabel','mapOrderLabel','mapLngLabel','mapLatLabel','mapStartLabel','mapEndLabel','mapDurationLabel','exportTitle','selectionStatsTitle','selectionTotalLabel','selectionActiveLabel','selectionPendingLabel','selectionFinishedLabel'].forEach(function(id){
+        const keyMap = { appTitle:'title',appDesc:'desc',languageLabel:'language',uploadLabel:'upload',uploadHint:'uploadHint',sheetSelectLabel:'sheetSelect',playbackControlsTitle:'controls',timelineLabel:'timeline',currentTimeLabel:'currentTime',totalCountLabel:'total',activeCountLabel:'active',pendingCountLabel:'pending',finishedCountLabel:'finished',dataSummaryTitle:'summary',summaryStartLabel:'start',summaryEndLabel:'end',summaryDurationLabel:'duration',timezoneLabel:'timezone',timezoneDesc:'timezoneDesc',emptyTitle:'emptyTitle',emptyDesc:'emptyDesc',statusTitle:'statusTitle',mappingTitle:'mappingTitle',mapCityLabel:'mapCity',mapOrderLabel:'mapOrder',mapLngLabel:'mapLng',mapLatLabel:'mapLat',mapStartLabel:'mapStart',mapEndLabel:'mapEnd',mapDurationLabel:'mapDuration',exportTitle:'export',selectionStatsTitle:'selectionStats',selectionTotalLabel:'total',selectionActiveLabel:'active',selectionPendingLabel:'pending',selectionFinishedLabel:'finished' };
         const el = document.getElementById(id); if (el) el.textContent = t(keyMap[id]);
       });
       document.getElementById('playBtn').textContent = t('play'); document.getElementById('pauseBtn').textContent = t('pause'); document.getElementById('resetBtn').textContent = t('reset'); document.getElementById('endBtn').textContent = t('jumpToEnd');
@@ -234,6 +250,7 @@
       document.getElementById('customSpeedInput').placeholder = t('customPlaceholderSpeed'); document.getElementById('customStepInput').placeholder = t('customPlaceholderStep');
       document.getElementById('applyMappingBtn').textContent = t('applyMapping');
       document.getElementById('exportGeoJsonBtn').textContent = t('exportGeoJson'); document.getElementById('exportKmlBtn').textContent = t('exportKml');
+      document.getElementById('selectBoxBtn').textContent = t('boxSelect'); document.getElementById('clearBoxBtn').textContent = t('clearBox');
       renderSpeedButtons(); renderStepButtons();
       if (currentSheetName) document.getElementById('sheetName').textContent = t('currentSheet', { name: currentSheetName });
       if (records.length) renderAtCursor();
@@ -244,6 +261,28 @@
       L.control.zoom({ position: 'topright' }).addTo(map);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
       markersLayer = L.layerGroup().addTo(map); polylineLayer = L.layerGroup().addTo(map);
+
+      map.on('mousedown', function(e) {
+        if (!selectionMode) return;
+        selectionStartLatLng = e.latlng;
+        if (selectionRectangle) map.removeLayer(selectionRectangle);
+        selectionRectangle = L.rectangle([selectionStartLatLng, selectionStartLatLng], { color: '#0ea5e9', weight: 2, dashArray: '4 4' }).addTo(map);
+        map.dragging.disable();
+      });
+      map.on('mousemove', function(e) {
+        if (!selectionMode || !selectionStartLatLng || !selectionRectangle) return;
+        selectionRectangle.setBounds(L.latLngBounds(selectionStartLatLng, e.latlng));
+      });
+      map.on('mouseup', function(e) {
+        if (!selectionMode || !selectionStartLatLng) return;
+        selectionBounds = L.latLngBounds(selectionStartLatLng, e.latlng);
+        if (selectionRectangle) selectionRectangle.setBounds(selectionBounds);
+        selectionMode = false;
+        selectionStartLatLng = null;
+        map.dragging.enable();
+        document.getElementById('selectBoxBtn').classList.remove('selection-active');
+        updateSelectionStats();
+      });
     }
     function normalizeHeader(v){ return String(v || '').trim().replace(/\s+/g, '').toLowerCase(); }
     function findHeaderKey(hs, aliases){ const nh = hs.map(normalizeHeader); for (const alias of aliases){ const idx = nh.indexOf(normalizeHeader(alias)); if (idx !== -1) return hs[idx]; } return ''; }
@@ -268,10 +307,18 @@
 
     function showError(msg){ const box=document.getElementById('errorBox'); box.textContent = msg; box.style.display='block'; }
     function clearError(){ const box=document.getElementById('errorBox'); box.textContent=''; box.style.display='none'; }
-    function setControlsEnabled(enabled){ ['playBtn','pauseBtn','resetBtn','endBtn','timeRange','exportGeoJsonBtn','exportKmlBtn'].forEach(id => document.getElementById(id).disabled = !enabled); }
+    function setControlsEnabled(enabled){ ['playBtn','pauseBtn','resetBtn','endBtn','timeRange','exportGeoJsonBtn','exportKmlBtn','selectBoxBtn','clearBoxBtn'].forEach(id => document.getElementById(id).disabled = !enabled); }
     function fitMapBounds(points){ if (!points.length) return; const bounds = L.latLngBounds(points.map(p => [p.lat,p.lng])); map.fitBounds(bounds, { padding: [40,40] }); }
     function stopPlayback(){ if (playbackTimer){ clearInterval(playbackTimer); playbackTimer = null; } }
-    function startPlayback(){ if (!records.length || playbackTimer) return; playbackTimer = setInterval(function(){ cursor += stepSeconds * 1000 * speed; if (cursor >= maxTs){ cursor = maxTs; stopPlayback(); } renderAtCursor(); }, 350); }
+    function startPlayback(){
+      if (!records.length || playbackTimer) return;
+      if (cursor >= maxTs) {
+        initTimelineIndex();
+        cursor = minTs;
+        renderAtCursor();
+      }
+      playbackTimer = setInterval(function(){ cursor += stepSeconds * 1000 * speed; if (cursor >= maxTs){ cursor = maxTs; stopPlayback(); } renderAtCursor(); }, 350);
+    }
 
     function initTimelineIndex() {
       startSorted = records.slice().sort((a,b) => a.start - b.start);
@@ -317,6 +364,21 @@
       document.getElementById('timeRange').value = String(cursor);
       document.getElementById('statusPanel').style.display = 'block';
       document.getElementById('emptyState').style.display = 'none';
+      updateSelectionStats();
+    }
+
+    function updateSelectionStats() {
+      let selected = records;
+      if (selectionBounds) {
+        selected = records.filter(function(r) { return selectionBounds.contains([r.lat, r.lng]); });
+      }
+      const active = selected.filter(function(r){ return r.start.getTime() <= cursor && r.end.getTime() >= cursor; }).length;
+      const pending = selected.filter(function(r){ return r.start.getTime() > cursor; }).length;
+      const finished = selected.filter(function(r){ return r.end.getTime() < cursor; }).length;
+      document.getElementById('selectionTotalCount').textContent = String(selected.length);
+      document.getElementById('selectionActiveCount').textContent = String(active);
+      document.getElementById('selectionPendingCount').textContent = String(pending);
+      document.getElementById('selectionFinishedCount').textContent = String(finished);
     }
 
     function renderSpeedButtons(){ const wrap = document.getElementById('speedWrap'); wrap.innerHTML = ''; const options = customSpeed && !SPEED_OPTIONS.includes(customSpeed) ? SPEED_OPTIONS.concat([customSpeed]) : SPEED_OPTIONS.slice(); options.sort((a,b)=>a-b); options.forEach(function(v){ const btn=document.createElement('button'); btn.className='chip'+(Math.abs(v-speed)<1e-9?' active speed':''); btn.textContent=v+t('speedUnit'); btn.addEventListener('click', function(){ speed=v; saveConfig(); renderSpeedButtons(); }); wrap.appendChild(btn); }); document.getElementById('customSpeedInput').value = customSpeed || ''; }
@@ -405,7 +467,11 @@
     function resetStateWithError(msg) {
       records = []; currentSheetName = ''; minTs = 0; maxTs = 0; cursor = 0;
       setControlsEnabled(false); setMappingSelectorsEnabled(false);
+      selectionMode = false; selectionBounds = null; selectionStartLatLng = null;
+      if (selectionRectangle) { map.removeLayer(selectionRectangle); selectionRectangle = null; }
+      document.getElementById('selectBoxBtn').classList.remove('selection-active');
       document.getElementById('sheetName').textContent = ''; document.getElementById('totalCount').textContent = '0'; document.getElementById('activeCount').textContent = '0'; document.getElementById('pendingCount').textContent = '0'; document.getElementById('finishedCount').textContent = '0'; document.getElementById('currentTime').textContent = '-'; document.getElementById('summaryStart').textContent = '-'; document.getElementById('summaryEnd').textContent = '-'; document.getElementById('summaryDuration').textContent = '-'; document.getElementById('statusPanel').style.display = 'none'; document.getElementById('emptyState').style.display = 'flex'; showError(msg);
+      document.getElementById('selectionTotalCount').textContent = '0'; document.getElementById('selectionActiveCount').textContent = '0'; document.getElementById('selectionPendingCount').textContent = '0'; document.getElementById('selectionFinishedCount').textContent = '0';
     }
 
     function parseWorkbook(file) {
@@ -474,11 +540,40 @@
 
       document.getElementById('playBtn').addEventListener('click', startPlayback);
       document.getElementById('pauseBtn').addEventListener('click', stopPlayback);
-      document.getElementById('resetBtn').addEventListener('click', function(){ if (!records.length) return; stopPlayback(); cursor = minTs; renderAtCursor(); });
+      document.getElementById('resetBtn').addEventListener('click', function(){
+        if (!records.length) return;
+        stopPlayback();
+        markersLayer.clearLayers();
+        polylineLayer.clearLayers();
+        initTimelineIndex();
+        cursor = minTs;
+        renderAtCursor();
+      });
       document.getElementById('endBtn').addEventListener('click', function(){ if (!records.length) return; stopPlayback(); cursor = maxTs; renderAtCursor(); });
       document.getElementById('timeRange').addEventListener('input', function(e){ if (!records.length) return; stopPlayback(); cursor = Number(e.target.value); renderAtCursor(); });
       document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJson);
       document.getElementById('exportKmlBtn').addEventListener('click', exportKml);
+      document.getElementById('selectBoxBtn').addEventListener('click', function() {
+        if (!records.length) return;
+        selectionMode = !selectionMode;
+        document.getElementById('selectBoxBtn').classList.toggle('selection-active', selectionMode);
+        if (!selectionMode && map) {
+          selectionStartLatLng = null;
+          map.dragging.enable();
+        }
+      });
+      document.getElementById('clearBoxBtn').addEventListener('click', function() {
+        selectionMode = false;
+        selectionBounds = null;
+        selectionStartLatLng = null;
+        document.getElementById('selectBoxBtn').classList.remove('selection-active');
+        if (selectionRectangle && map) {
+          map.removeLayer(selectionRectangle);
+          selectionRectangle = null;
+        }
+        if (map) map.dragging.enable();
+        updateSelectionStats();
+      });
 
       renderSpeedButtons(); renderStepButtons();
     });
