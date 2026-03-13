@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>干扰告警地图回放平台</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { background: #f1f5f9; color: #0f172a; }
+    .app { display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+    .sidebar { overflow-y: auto; background: #fff; border-right: 1px solid #e2e8f0; padding: 20px; }
+    .main { position: relative; }
+    #map { width: 100%; height: 100%; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04); margin-bottom: 16px; }
+    h1 { margin: 0 0 10px 0; font-size: 26px; }
+    h2 { margin: 0 0 12px 0; font-size: 17px; }
+    p { margin: 8px 0; line-height: 1.6; color: #475569; }
+    .muted { color: #64748b; font-size: 13px; }
+    .error { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn, .chip, input[type="file"] { font: inherit; }
+    .btn { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+    .btn.primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .chip { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+    .chip.active.speed { background: #ea580c; color: #fff; border-color: #ea580c; }
+    .chip.active.step { background: #0369a1; color: #fff; border-color: #0369a1; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; }
+    .stat .label { font-size: 12px; color: #64748b; }
+    .stat .value { margin-top: 4px; font-size: 28px; font-weight: 700; }
+    .status-panel {
+      position: absolute; left: 16px; top: 16px; z-index: 500;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+      border-radius: 16px; padding: 14px 16px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+      max-width: 420px;
+    }
+    .status-panel .title { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #64748b; }
+    .status-panel .time { margin-top: 4px; font-weight: 700; font-size: 18px; }
+    .status-panel .desc { margin-top: 8px; font-size: 14px; color: #334155; line-height: 1.6; }
+    .empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200;
+      pointer-events: none; text-align: center; padding: 30px; color: #475569;
+    }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+    .range-wrap { margin-top: 8px; }
+    input[type="range"] { width: 100%; }
+    .kv { display: grid; grid-template-columns: 90px 1fr; gap: 8px; font-size: 14px; line-height: 1.6; }
+    .hint { margin-top: 10px; font-size: 12px; line-height: 1.6; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 10px 12px; border-radius: 12px; }
+    .leaflet-top.leaflet-right { top: 16px; right: 16px; }
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .sidebar { max-height: 45vh; border-right: none; border-bottom: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div style="margin-bottom: 20px;">
+        <h1>干扰告警地图回放平台</h1>
+        <p>上传 Excel 后，系统按“告警发生时间—告警消除时间”回放点位。当前版本是纯点位模式，用于观察干扰区域是否在地图上迁移。</p>
+      </div>
+
+      <div class="card">
+        <div class="field">
+          <label for="fileInput">上传 Excel 文件</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xls" />
+          <div class="muted" style="margin-top: 8px;">建议包含字段：地市、经度、纬度、告警发生时间、告警消除时间。</div>
+          <div id="sheetName" class="muted" style="margin-top: 8px;"></div>
+          <div id="errorBox" class="error" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>回放控制</h2>
+        <div class="row" style="margin-bottom: 14px;">
+          <button id="playBtn" class="btn primary" disabled>播放</button>
+          <button id="pauseBtn" class="btn" disabled>暂停</button>
+          <button id="resetBtn" class="btn" disabled>回到起点</button>
+          <button id="endBtn" class="btn" disabled>跳到终点</button>
+        </div>
+
+        <div class="field">
+          <label>回放倍速</label>
+          <div id="speedWrap" class="row"></div>
+        </div>
+
+        <div class="field">
+          <label>时间步长</label>
+          <div id="stepWrap" class="row"></div>
+        </div>
+
+        <div class="field">
+          <label for="timeRange">时间轴</label>
+          <div class="range-wrap">
+            <input id="timeRange" type="range" min="0" max="100" value="0" disabled />
+          </div>
+          <div class="muted" style="margin-top: 8px;">当前时间：<span id="currentTime">-</span></div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">总记录数</div><div id="totalCount" class="value">0</div></div>
+        <div class="stat"><div class="label">当前活跃</div><div id="activeCount" class="value" style="color:#dc2626;">0</div></div>
+        <div class="stat"><div class="label">尚未开始</div><div id="pendingCount" class="value" style="color:#334155;">0</div></div>
+        <div class="stat"><div class="label">已结束</div><div id="finishedCount" class="value" style="color:#047857;">0</div></div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2>数据摘要</h2>
+        <div class="kv"><div>开始时间</div><div id="summaryStart">-</div></div>
+        <div class="kv"><div>结束时间</div><div id="summaryEnd">-</div></div>
+        <div class="kv"><div>总时长</div><div id="summaryDuration">-</div></div>
+        <div class="kv"><div>时区</div><div>按 Excel 原始时间解释，不额外换算</div></div>
+        <div class="hint">OpenStreetMap 的 attribution 我保留了。那个小角标不是纯装修材料，许可要求摆在那里，不能硬抹掉。</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="map"></div>
+      <div id="emptyState" class="empty">
+        <div>
+          <div style="font-size: 24px; font-weight: 700; color:#0f172a;">先上传 Excel</div>
+          <div style="margin-top: 10px; font-size: 14px; line-height: 1.7;">上传后会按时间回放点位，地图上只显示当前时刻还在告警持续区间内的记录。</div>
+        </div>
+      </div>
+      <div id="statusPanel" class="status-panel" style="display:none;">
+        <div class="title">Replay Status</div>
+        <div id="statusTime" class="time">-</div>
+        <div id="statusDesc" class="desc">-</div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const FIELD_ALIASES = {
+      city: ["地市", "城市", "city"],
+      lng: ["经度", "longitude", "lng", "lon"],
+      lat: ["纬度", "latitude", "lat"],
+      start: ["告警发生时间", "发生时间", "开始时间", "start_time", "start"],
+      end: ["告警消除时间", "消除时间", "结束时间", "end_time", "end"],
+      duration: ["持续时间(秒)", "持续时间", "duration", "duration_sec"],
+      order: ["持续时间排序编号", "排序编号", "order", "rank"]
+    };
+
+    const SPEED_OPTIONS = [1, 2, 4, 8, 16, 32];
+    const STEP_OPTIONS = [1, 5, 10, 30, 60, 300];
+
+    let map;
+    let records = [];
+    let markersLayer;
+    let polylineLayer;
+    let playbackTimer = null;
+    let speed = 4;
+    let stepSeconds = 10;
+    let cursor = 0;
+    let minTs = 0;
+    let maxTs = 0;
+
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([35.8617, 104.1954], 5);
+      L.control.zoom({ position: 'topright' }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+      polylineLayer = L.layerGroup().addTo(map);
+    }
+
+    function normalizeHeader(value) {
+      return String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+    }
+
+    function findHeaderKey(headers, aliases) {
+      const normalizedHeaders = headers.map(normalizeHeader);
+      for (const alias of aliases) {
+        const idx = normalizedHeaders.indexOf(normalizeHeader(alias));
+        if (idx !== -1) return headers[idx];
+      }
+      return null;
+    }
+
+    function formatDateTime(date) {
+      if (!date || Number.isNaN(date.getTime())) return '-';
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mm = String(date.getMinutes()).padStart(2, '0');
+      const ss = String(date.getSeconds()).padStart(2, '0');
+      return y + '-' + m + '-' + d + ' ' + hh + ':' + mm + ':' + ss;
+    }
+
+    function formatDuration(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return '-';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      return h + 'h ' + m + 'm ' + s + 's';
+    }
+
+    function excelSerialToDate(serial) {
+      const utcDays = Math.floor(serial - 25569);
+      const utcValue = utcDays * 86400;
+      const fractionalDay = serial - Math.floor(serial) + 0.0000001;
+      const totalSeconds = Math.floor(86400 * fractionalDay);
+      const dateInfo = new Date(utcValue * 1000);
+      return new Date(
+        dateInfo.getUTCFullYear(),
+        dateInfo.getUTCMonth(),
+        dateInfo.getUTCDate(),
+        Math.floor(totalSeconds / 3600),
+        Math.floor((totalSeconds % 3600) / 60),
+        totalSeconds % 60
+      );
+    }
+
+    function parseExcelDate(value) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+      if (typeof value === 'number' && Number.isFinite(value)) return excelSerialToDate(value);
+      if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return null;
+        if (/^\d+(\.\d+)?$/.test(text)) return excelSerialToDate(Number(text));
+        const normalized = text.replace(/\//g, '-');
+        const parsed = new Date(normalized);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      return null;
+    }
+
+    function showError(message) {
+      const box = document.getElementById('errorBox');
+      box.textContent = message;
+      box.style.display = 'block';
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      box.textContent = '';
+      box.style.display = 'none';
+    }
+
+    function setControlsEnabled(enabled) {
+      document.getElementById('playBtn').disabled = !enabled;
+      document.getElementById('pauseBtn').disabled = !enabled;
+      document.getElementById('resetBtn').disabled = !enabled;
+      document.getElementById('endBtn').disabled = !enabled;
+      document.getElementById('timeRange').disabled = !enabled;
+    }
+
+    function fitMapBounds(points) {
+      if (!points.length) return;
+      const bounds = L.latLngBounds(points.map(function(p){ return [p.lat, p.lng]; }));
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+
+    function stopPlayback() {
+      if (playbackTimer) {
+        clearInterval(playbackTimer);
+        playbackTimer = null;
+      }
+    }
+
+    function startPlayback() {
+      if (!records.length || playbackTimer) return;
+      playbackTimer = setInterval(function() {
+        cursor += stepSeconds * 1000 * speed;
+        if (cursor >= maxTs) {
+          cursor = maxTs;
+          stopPlayback();
+        }
+        renderAtCursor();
+      }, 350);
+    }
+
+    function getActiveRecords() {
+      return records.filter(function(r){ return r.start.getTime() <= cursor && r.end.getTime() >= cursor; });
+    }
+
+    function renderAtCursor() {
+      markersLayer.clearLayers();
+      polylineLayer.clearLayers();
+
+      const active = getActiveRecords().sort(function(a, b){ return a.start - b.start; });
+      const latestStart = active.length ? Math.max.apply(null, active.map(function(r){ return r.start.getTime(); })) : null;
+
+      active.forEach(function(r) {
+        const isLatest = latestStart !== null && r.start.getTime() === latestStart;
+        const marker = L.circleMarker([r.lat, r.lng], {
+          radius: 8,
+          color: isLatest ? '#7c2d12' : '#b91c1c',
+          weight: 2,
+          fillColor: isLatest ? '#ea580c' : '#ef4444',
+          fillOpacity: 0.72
+        });
+
+        marker.bindPopup(
+          '<div style="font-size:13px;line-height:1.6;min-width:220px;">' +
+            '<div><strong>地市：</strong>' + (r.city == null ? '-' : r.city) + '</div>' +
+            '<div><strong>经纬度：</strong>' + r.lng + ', ' + r.lat + '</div>' +
+            '<div><strong>开始：</strong>' + formatDateTime(r.start) + '</div>' +
+            '<div><strong>结束：</strong>' + formatDateTime(r.end) + '</div>' +
+            '<div><strong>持续：</strong>' + formatDuration(r.duration) + '</div>' +
+            '<div><strong>排序编号：</strong>' + (r.order == null ? '-' : r.order) + '</div>' +
+          '</div>'
+        );
+        marker.addTo(markersLayer);
+      });
+
+      if (active.length >= 2) {
+        L.polyline(active.map(function(r){ return [r.lat, r.lng]; }), {
+          color: '#0369a1', weight: 3, opacity: 0.65, dashArray: '6 6'
+        }).addTo(polylineLayer);
+      }
+
+      document.getElementById('currentTime').textContent = formatDateTime(new Date(cursor));
+      document.getElementById('statusTime').textContent = formatDateTime(new Date(cursor));
+      document.getElementById('statusDesc').textContent = '活跃告警 ' + active.length + ' 条，当前用虚线串起活跃点，方便观察干扰是否在地图上迁移。';
+      document.getElementById('activeCount').textContent = String(active.length);
+      document.getElementById('pendingCount').textContent = String(records.filter(function(r){ return r.start.getTime() > cursor; }).length);
+      document.getElementById('finishedCount').textContent = String(records.filter(function(r){ return r.end.getTime() < cursor; }).length);
+      document.getElementById('timeRange').value = String(cursor);
+      document.getElementById('statusPanel').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+    }
+
+    function renderSpeedButtons() {
+      const wrap = document.getElementById('speedWrap');
+      wrap.innerHTML = '';
+      SPEED_OPTIONS.forEach(function(v) {
+        const btn = document.createElement('button');
+        btn.className = 'chip' + (v === speed ? ' active speed' : '');
+        btn.textContent = v + 'x';
+        btn.addEventListener('click', function() {
+          speed = v;
+          renderSpeedButtons();
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function renderStepButtons() {
+      const wrap = document.getElementById('stepWrap');
+      wrap.innerHTML = '';
+      STEP_OPTIONS.forEach(function(v) {
+        const btn = document.createElement('button');
+        btn.className = 'chip' + (v === stepSeconds ? ' active step' : '');
+        btn.textContent = v + 's';
+        btn.addEventListener('click', function() {
+          stepSeconds = v;
+          renderStepButtons();
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function parseWorkbook(file) {
+      return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: true });
+            const firstSheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[firstSheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+
+            if (!rows.length) {
+              reject(new Error('Excel 里没有可用数据。'));
+              return;
+            }
+
+            const headers = Object.keys(rows[0]);
+            const cityKey = findHeaderKey(headers, FIELD_ALIASES.city);
+            const lngKey = findHeaderKey(headers, FIELD_ALIASES.lng);
+            const latKey = findHeaderKey(headers, FIELD_ALIASES.lat);
+            const startKey = findHeaderKey(headers, FIELD_ALIASES.start);
+            const endKey = findHeaderKey(headers, FIELD_ALIASES.end);
+            const durationKey = findHeaderKey(headers, FIELD_ALIASES.duration);
+            const orderKey = findHeaderKey(headers, FIELD_ALIASES.order);
+
+            const missing = [];
+            if (!lngKey) missing.push('经度');
+            if (!latKey) missing.push('纬度');
+            if (!startKey) missing.push('告警发生时间');
+            if (!endKey) missing.push('告警消除时间');
+            if (missing.length) {
+              reject(new Error('缺少关键字段：' + missing.join('、')));
+              return;
+            }
+
+            const parsed = rows.map(function(row, index) {
+              const lat = Number(row[latKey]);
+              const lng = Number(row[lngKey]);
+              const start = parseExcelDate(row[startKey]);
+              const end = parseExcelDate(row[endKey]);
+              const durationRaw = durationKey ? Number(row[durationKey]) : NaN;
+
+              if (!Number.isFinite(lat) || !Number.isFinite(lng) || !start || !end || end < start) {
+                return null;
+              }
+
+              return {
+                id: index + '-' + lat + '-' + lng + '-' + start.getTime(),
+                city: cityKey ? row[cityKey] : '-',
+                lat: lat,
+                lng: lng,
+                start: start,
+                end: end,
+                duration: Number.isFinite(durationRaw) ? durationRaw : Math.max(0, Math.floor((end - start) / 1000)),
+                order: orderKey ? row[orderKey] : null,
+                raw: row
+              };
+            }).filter(Boolean).sort(function(a, b){ return a.start - b.start; });
+
+            if (!parsed.length) {
+              reject(new Error('没有解析出有效记录。请检查经纬度和时间字段格式。'));
+              return;
+            }
+
+            resolve({ sheetName: firstSheetName, rows: parsed });
+          } catch (error) {
+            reject(error);
+          }
+        };
+        reader.onerror = function() {
+          reject(new Error('文件读取失败。'));
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    async function handleFile(file) {
+      clearError();
+      stopPlayback();
+      markersLayer.clearLayers();
+      polylineLayer.clearLayers();
+      try {
+        const parsed = await parseWorkbook(file);
+        records = parsed.rows;
+        minTs = records[0].start.getTime();
+        maxTs = Math.max.apply(null, records.map(function(r){ return r.end.getTime(); }));
+        cursor = minTs;
+
+        document.getElementById('sheetName').textContent = '当前工作表：' + parsed.sheetName;
+        document.getElementById('totalCount').textContent = String(records.length);
+        document.getElementById('summaryStart').textContent = formatDateTime(records[0].start);
+        document.getElementById('summaryEnd').textContent = formatDateTime(new Date(maxTs));
+        document.getElementById('summaryDuration').textContent = formatDuration(Math.floor((maxTs - minTs) / 1000));
+
+        const range = document.getElementById('timeRange');
+        range.min = String(minTs);
+        range.max = String(maxTs);
+        range.value = String(cursor);
+
+        setControlsEnabled(true);
+        fitMapBounds(records);
+        renderAtCursor();
+      } catch (error) {
+        records = [];
+        minTs = 0;
+        maxTs = 0;
+        cursor = 0;
+        setControlsEnabled(false);
+        document.getElementById('sheetName').textContent = '';
+        document.getElementById('totalCount').textContent = '0';
+        document.getElementById('activeCount').textContent = '0';
+        document.getElementById('pendingCount').textContent = '0';
+        document.getElementById('finishedCount').textContent = '0';
+        document.getElementById('currentTime').textContent = '-';
+        document.getElementById('summaryStart').textContent = '-';
+        document.getElementById('summaryEnd').textContent = '-';
+        document.getElementById('summaryDuration').textContent = '-';
+        document.getElementById('statusPanel').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'flex';
+        showError(error && error.message ? error.message : '解析失败。');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      initMap();
+      renderSpeedButtons();
+      renderStepButtons();
+      setControlsEnabled(false);
+
+      document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files && e.target.files[0];
+        if (file) handleFile(file);
+      });
+      document.getElementById('playBtn').addEventListener('click', startPlayback);
+      document.getElementById('pauseBtn').addEventListener('click', stopPlayback);
+      document.getElementById('resetBtn').addEventListener('click', function() {
+        if (!records.length) return;
+        stopPlayback();
+        cursor = minTs;
+        renderAtCursor();
+      });
+      document.getElementById('endBtn').addEventListener('click', function() {
+        if (!records.length) return;
+        stopPlayback();
+        cursor = maxTs;
+        renderAtCursor();
+      });
+      document.getElementById('timeRange').addEventListener('input', function(e) {
+        if (!records.length) return;
+        stopPlayback();
+        cursor = Number(e.target.value);
+        renderAtCursor();
+      });
+    });
+  </script>
+</body>
+</html>
