@@ -21,7 +21,7 @@ It is particularly useful for analyzing spatial-temporal patterns such as GNSS i
 
 ## Screenshot
 
-![JamScope UI Screenshot](browser:/tmp/codex_browser_invocations/1cf936fdd4aca4e1/artifacts/artifacts/replay-home.png)
+![JamScope UI Screenshot](replay-home.png)
 
 ---
 
@@ -73,4 +73,4 @@ OpenStreetMap attribution is preserved as required by the license.
 
 ## License
 
-MIT License
+Apache License 2.0
