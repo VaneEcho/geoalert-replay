@@ -19,6 +19,12 @@ It is particularly useful for analyzing spatial-temporal patterns such as GNSS i
 
 ---
 
+## Screenshot
+
+![JamScope UI Screenshot](browser:/tmp/codex_browser_invocations/1cf936fdd4aca4e1/artifacts/artifacts/replay-home.png)
+
+---
+
 ## Expected Excel Format
 
 The Excel file should contain fields similar to:
